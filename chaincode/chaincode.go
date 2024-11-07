@@ -136,5 +136,27 @@ func (r *RealEstate) TransferPropertyOwnerShip(ctx contractapi.TransactionContex
 
 }
 
+func (r *RealEstate) GetAllUsers(ctx  contractapi.TransactionContextInterface)([]User,error){
+	var users []User
+	resultIterator,err:=ctx.GetStub().GetStateByRange("","")
+	if err!=nil{
+		return nil,fmt.Errorf("failed to get users: %v",err)
+	}
+	defer resultIterator.Close()
+	for resultIterator.HasNext(){
+		queryResponse,err:=resultIterator.Next()
+		if err!=nil{
+			return nil,fmt.Errorf("Failed to iterate over users: %v",err)
+		}
+		var user User
+		err=json.Unmarshal(queryResponse.Value,&user)
+        if(err!=nil){
+			return nil,fmt.Errorf("failed to unmarshal user data: %v",err)
+		}
+		users=append(users, user)
+	}
+	return users,nil
+}
+
 
 
