@@ -65,7 +65,12 @@ func (r *RealEstate) RegisterUser(ctx contractapi.TransactionContextInterface, u
 }
 
 func (r *RealEstate) RegisterProperty(ctx contractapi.TransactionContextInterface, propertyId string, title string, location string, size float64, currentOwnerId string, price float64, isListed bool) error {
-	propertyExists, err := ctx.GetStub().GetState(propertyId)
+	compositeIndexName := "propertyType~propertyId"
+	propertyKey, err := ctx.GetStub().CreateCompositeKey(compositeIndexName, []string{"PROPERTY", propertyId})
+	if err != nil {
+		return fmt.Errorf("failed to create composite key for property : %v", err)
+	}
+	propertyExists, err := ctx.GetStub().GetState(propertyKey)
 	if err != nil {
 		return fmt.Errorf("failed to read property from world state: %v", err)
 	}
@@ -75,10 +80,9 @@ func (r *RealEstate) RegisterProperty(ctx contractapi.TransactionContextInterfac
 	property := Property{Id: propertyId, Title: title, Location: location, Size: size, CurrentOwnerId: currentOwnerId, Price: price, IsListed: isListed}
 	propertyJson, err := json.Marshal(property)
 	if err != nil {
-		return fmt.Errorf("failed to convert property struct to json : %v", err)
+		return fmt.Errorf("failed to convert property struct to JSON: %v", err)
 	}
-	err = ctx.GetStub().PutState(propertyId, propertyJson)
-
+	err = ctx.GetStub().PutState(propertyKey, propertyJson)
 	if err != nil {
 		return fmt.Errorf("failed to put property in world state: %v", err)
 	}
