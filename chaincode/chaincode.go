@@ -165,15 +165,17 @@ func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, pr
 
 func (r *RealEstate) GetAllUsers(ctx contractapi.TransactionContextInterface) ([]User, error) {
 	var users []User
-	resultIterator, err := ctx.GetStub().GetStateByRange("", "")
+	compositeIndexName := "userType~userId"
+	resultIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(compositeIndexName, []string{"USER"})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get users: %v", err)
+		return nil, fmt.Errorf("failed to get users: %v ", err)
 	}
 	defer resultIterator.Close()
+
 	for resultIterator.HasNext() {
 		queryResponse, err := resultIterator.Next()
 		if err != nil {
-			return nil, fmt.Errorf("failed to iterate over users: %v", err)
+			return nil, fmt.Errorf("failed to iterate over users : %v", err)
 		}
 		var user User
 		err = json.Unmarshal(queryResponse.Value, &user)
