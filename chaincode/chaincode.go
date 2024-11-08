@@ -39,7 +39,12 @@ type RealEstate struct {
 }
 
 func (r *RealEstate) RegisterUser(ctx contractapi.TransactionContextInterface, userId string, name string, address string, contact string) error {
-	userExists, err := ctx.GetStub().GetState(userId)
+	compositeIndexName := "userType~userId"
+	userKey, err := ctx.GetStub().CreateCompositeKey(compositeIndexName, []string{"USER", userId})
+	if err != nil {
+		return fmt.Errorf("failed to create composite key for user : %v", err)
+	}
+	userExists, err := ctx.GetStub().GetState(userKey)
 	if err != nil {
 		return fmt.Errorf("failed to read user from world state: %v", err)
 	}
@@ -49,9 +54,9 @@ func (r *RealEstate) RegisterUser(ctx contractapi.TransactionContextInterface, u
 	user := User{UserId: userId, Name: name, Address: address, Contact: contact}
 	userJson, err := json.Marshal(user)
 	if err != nil {
-		return fmt.Errorf("failed to convert user struct to json : %v", err)
+		return fmt.Errorf("failed to convert user struct to json: %v", err)
 	}
-	err = ctx.GetStub().PutState(userId, userJson)
+	err = ctx.GetStub().PutState(userKey, userJson)
 	if err != nil {
 		return fmt.Errorf("failed to put user in world state: %v", err)
 	}
@@ -81,7 +86,7 @@ func (r *RealEstate) RegisterProperty(ctx contractapi.TransactionContextInterfac
 
 }
 
-func (r *RealEstate) TransferPropertyOwnership(ctx contractapi.TransactionContextInterface, propertyId string, buyerId string, sellerId string, price float64, data string) error {
+func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, propertyId string, buyerId string, sellerId string, price float64, date string) error {
 	propertyBytes, err := ctx.GetStub().GetState(propertyId)
 	if err != nil {
 		return fmt.Errorf("failed to read property from world state: %v", err)
@@ -120,7 +125,7 @@ func (r *RealEstate) TransferPropertyOwnership(ctx contractapi.TransactionContex
 	if err != nil {
 		return fmt.Errorf("failed to update property in world state: %v", err)
 	}
-	transaction := Transaction{Id: fmt.Sprintf("TXN-%s-%s-%s", sellerId, buyerId, propertyId), PropertyId: propertyId, BuyerId: buyerId, SellerId: sellerId, Amount: price, Date: data, Status: "Completed"}
+	transaction := Transaction{Id: fmt.Sprintf("TXN-%s-%s-%s", sellerId, buyerId, propertyId), PropertyId: propertyId, BuyerId: buyerId, SellerId: sellerId, Amount: price, Date: date, Status: "Completed"}
 
 	transactionJson, err := json.Marshal(transaction)
 	if err != nil {
