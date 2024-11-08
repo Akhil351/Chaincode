@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -28,7 +26,9 @@ const (
 	peerEndpoint = "dns:///localhost:7051"
 	gatewayPeer  = "peer0.org1.example.com"
 )
-type Handler=handler.Handler
+
+type Handler = handler.Handler
+
 func main() {
 	// The gRPC client connection should be shared by all Gateway connections to this endpoint
 	clientConnection := newGrpcConnection()
@@ -67,13 +67,13 @@ func main() {
 
 	network := gw.GetNetwork(channelName)
 	contract := network.GetContract(chaincodeName)
-	r:=mux.NewRouter()
-	handler:=Handler{Contract:contract}
-	r.HandleFunc("/api/createUser",handler.RegisterUser).Methods("POST")
-	r.HandleFunc("/api/getUsers",handler.GetAllUsers).Methods("GET")
-	http.Handle("/",r)
-	http.ListenAndServe("localhost:8080",r)
-    fmt.Println("Running")
+	r := mux.NewRouter()
+	handler := Handler{Contract: contract}
+	r.HandleFunc("/api/createUser", handler.RegisterUser).Methods("POST")
+	r.HandleFunc("/api/getUsers", handler.GetAllUsers).Methods("GET")
+	http.Handle("/", r)
+	http.ListenAndServe("localhost:8080", r)
+	fmt.Println("Running")
 }
 
 // newGrpcConnection creates a gRPC connection to the Gateway server.
@@ -152,13 +152,4 @@ func readFirstFile(dirPath string) ([]byte, error) {
 	}
 
 	return os.ReadFile(path.Join(dirPath, fileNames[0]))
-}
-
-// Format JSON data
-func formatJSON(data []byte) string {
-	var prettyJSON bytes.Buffer
-	if err := json.Indent(&prettyJSON, data, "", "  "); err != nil {
-		panic(fmt.Errorf("failed to parse JSON: %w", err))
-	}
-	return prettyJSON.String()
 }
