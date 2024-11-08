@@ -65,7 +65,7 @@ func (r *RealEstate) RegisterProperty(ctx contractapi.TransactionContextInterfac
 		return fmt.Errorf("failed to read property from world state: %v", err)
 	}
 	if propertyExists != nil {
-		return fmt.Errorf("property Already exist")
+		return fmt.Errorf("Property already exists")
 	}
 	property := Property{Id: propertyId, Title: title, Location: location, Size: size, CurrentOwnerId: currentOwnerId, Price: price, IsListed: isListed}
 	propertyJson, err := json.Marshal(property)
@@ -81,7 +81,7 @@ func (r *RealEstate) RegisterProperty(ctx contractapi.TransactionContextInterfac
 
 }
 
-func (r *RealEstate) TransferPropertyOwnerShip(ctx contractapi.TransactionContextInterface, propertyId string, buyerId string, sellerId string, amount float64, data string) error {
+func (r *RealEstate) TransferPropertyOwnership(ctx contractapi.TransactionContextInterface, propertyId string, buyerId string, sellerId string, price float64, data string) error {
 	propertyBytes, err := ctx.GetStub().GetState(propertyId)
 	if err != nil {
 		return fmt.Errorf("failed to read property from world state: %v", err)
@@ -98,11 +98,11 @@ func (r *RealEstate) TransferPropertyOwnerShip(ctx contractapi.TransactionContex
 	}
 
 	if !property.IsListed {
-		return fmt.Errorf("property is not listed to sale")
+		return fmt.Errorf("property is not listed for sale")
 	}
 
 	if property.CurrentOwnerId != sellerId {
-		return fmt.Errorf("seller is the not the current owner of the property")
+		return fmt.Errorf("seller is not the current owner of the property")
 	}
 
 	if property.CurrentOwnerId == buyerId {
@@ -120,7 +120,7 @@ func (r *RealEstate) TransferPropertyOwnerShip(ctx contractapi.TransactionContex
 	if err != nil {
 		return fmt.Errorf("failed to update property in world state: %v", err)
 	}
-	transaction := Transaction{Id: fmt.Sprintf("TXN-%s-%s-%s", sellerId, buyerId, propertyId), PropertyId: propertyId, BuyerId: buyerId, SellerId: sellerId, Amount: amount, Date: data, Status: "Complted"}
+	transaction := Transaction{Id: fmt.Sprintf("TXN-%s-%s-%s", sellerId, buyerId, propertyId), PropertyId: propertyId, BuyerId: buyerId, SellerId: sellerId, Amount: price, Date: data, Status: "Completed"}
 
 	transactionJson, err := json.Marshal(transaction)
 	if err != nil {
@@ -134,7 +134,7 @@ func (r *RealEstate) TransferPropertyOwnerShip(ctx contractapi.TransactionContex
 
 }
 
-func (r *RealEstate) GetAllDetails(ctx contractapi.TransactionContextInterface) ([]User, error) {
+func (r *RealEstate) GetAllUsers(ctx contractapi.TransactionContextInterface) ([]User, error) {
 	var users []User
 	resultIterator, err := ctx.GetStub().GetStateByRange("", "")
 	if err != nil {
