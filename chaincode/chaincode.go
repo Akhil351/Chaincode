@@ -186,3 +186,53 @@ func (r *RealEstate) GetAllUsers(ctx contractapi.TransactionContextInterface) ([
 	}
 	return users, nil
 }
+
+
+func (r *RealEstate) GetAllProperty(ctx contractapi.TransactionContextInterface) ([]Property, error) {
+	var properties []Property
+	compositeIndexName := "propertyType~propertyId"
+	resultIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(compositeIndexName, []string{"PROPERTY"})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get properties: %v ", err)
+	}
+	defer resultIterator.Close()
+
+	for resultIterator.HasNext() {
+		queryResponse, err := resultIterator.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to iterate over properties: %v", err)  
+		}
+		var property Property
+		err = json.Unmarshal(queryResponse.Value, &property)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal property data: %v", err)  
+		}
+		properties = append(properties, property)
+	}
+	return properties, nil
+}
+
+
+func (r *RealEstate) GetAllTransaction(ctx contractapi.TransactionContextInterface) ([]Transaction, error) {
+	var transactions []Transaction
+	compositeIndexName := "transactionType~transactionId"
+	resultIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(compositeIndexName, []string{"TRANSACTION"})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transactions: %v ", err)
+	}
+	defer resultIterator.Close()
+
+	for resultIterator.HasNext() {
+		queryResponse, err := resultIterator.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to iterate over transactions: %v", err)  
+		}
+		var transaction Transaction
+		err = json.Unmarshal(queryResponse.Value, &transaction)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal transaction data: %v", err)  
+		}
+		transactions = append(transactions, transaction)
+	}
+	return transactions, nil
+}
