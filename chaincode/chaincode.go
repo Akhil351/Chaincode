@@ -91,11 +91,16 @@ func (r *RealEstate) RegisterProperty(ctx contractapi.TransactionContextInterfac
 }
 
 func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, propertyId string, buyerId string, sellerId string, price float64, date string) error {
-	propertyBytes, err := ctx.GetStub().GetState(propertyId)
+	compositeIndexName := "propertyType~propertyId"
+	propertyKey, err := ctx.GetStub().CreateCompositeKey(compositeIndexName, []string{"PROPERTY", propertyId})
+	if err != nil {
+		return fmt.Errorf("failed to create composite key for property: %v", err)
+	}
+
+	propertyBytes, err := ctx.GetStub().GetState(propertyKey)
 	if err != nil {
 		return fmt.Errorf("failed to read property from world state: %v", err)
 	}
-
 	if propertyBytes == nil {
 		return fmt.Errorf("property not found")
 	}
@@ -109,11 +114,9 @@ func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, pr
 	if !property.IsListed {
 		return fmt.Errorf("property is not listed for sale")
 	}
-
 	if property.CurrentOwnerId != sellerId {
 		return fmt.Errorf("seller is not the current owner of the property")
 	}
-
 	if property.CurrentOwnerId == buyerId {
 		return fmt.Errorf("buyer cannot be the current owner")
 	}
@@ -123,24 +126,41 @@ func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, pr
 
 	updatedPropertyJson, err := json.Marshal(property)
 	if err != nil {
-		return fmt.Errorf("failed to  marshal updated property: %v", err)
+		return fmt.Errorf("failed to marshal updated property: %v", err)
 	}
-	err = ctx.GetStub().PutState(propertyId, updatedPropertyJson)
+	err = ctx.GetStub().PutState(propertyKey, updatedPropertyJson)
 	if err != nil {
 		return fmt.Errorf("failed to update property in world state: %v", err)
 	}
-	transaction := Transaction{Id: fmt.Sprintf("TXN-%s-%s-%s", sellerId, buyerId, propertyId), PropertyId: propertyId, BuyerId: buyerId, SellerId: sellerId, Amount: price, Date: date, Status: "Completed"}
+
+	transactionCompositeIndexName := "transactionType~transactionId"
+	transactionId := fmt.Sprintf("TXN-%s-%s-%s", sellerId, buyerId, propertyId)
+	transactionKey, err := ctx.GetStub().CreateCompositeKey(transactionCompositeIndexName, []string{"TRANSACTION", transactionId})
+	if err != nil {
+		return fmt.Errorf("failed to create composite key for transaction: %v", err)
+	}
+
+	transaction := Transaction{
+		Id:         transactionId,
+		PropertyId: propertyId,
+		BuyerId:    buyerId,
+		SellerId:   sellerId,
+		Amount:     price,
+		Date:       date,
+		Status:     "Completed",
+	}
 
 	transactionJson, err := json.Marshal(transaction)
 	if err != nil {
 		return fmt.Errorf("failed to marshal transaction: %v", err)
 	}
-	err = ctx.GetStub().PutState(transaction.Id, transactionJson)
+
+	err = ctx.GetStub().PutState(transactionKey, transactionJson)
 	if err != nil {
 		return fmt.Errorf("failed to save transaction to world state: %v", err)
 	}
-	return nil
 
+	return nil
 }
 
 func (r *RealEstate) GetAllUsers(ctx contractapi.TransactionContextInterface) ([]User, error) {
