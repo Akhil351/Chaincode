@@ -3,13 +3,11 @@ package main
 import (
 	"crypto/x509"
 	"fmt"
-	"net/http"
 	"os"
 	"path"
-	"project/gateway/handler"
+	"project/web"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/hyperledger/fabric-gateway/pkg/client"
 	"github.com/hyperledger/fabric-gateway/pkg/hash"
 	"github.com/hyperledger/fabric-gateway/pkg/identity"
@@ -26,8 +24,6 @@ const (
 	peerEndpoint = "dns:///localhost:7051"
 	gatewayPeer  = "peer0.org1.example.com"
 )
-
-type Handler = handler.Handler
 
 func main() {
 	// The gRPC client connection should be shared by all Gateway connections to this endpoint
@@ -67,8 +63,9 @@ func main() {
 
 	network := gw.GetNetwork(channelName)
 	contract := network.GetContract(chaincodeName)
-	routers(contract)
+	web.Routers(contract)
 }
+
 // newGrpcConnection creates a gRPC connection to the Gateway server.
 func newGrpcConnection() *grpc.ClientConn {
 	certificatePEM, err := os.ReadFile(tlsCertPath)
@@ -145,15 +142,4 @@ func readFirstFile(dirPath string) ([]byte, error) {
 	}
 
 	return os.ReadFile(path.Join(dirPath, fileNames[0]))
-}
-
-func routers(contract *client.Contract){
-	r := mux.NewRouter()
-	handler := Handler{Contract: contract}
-	apipath:="/api/v2"
-	r.HandleFunc(apipath+"/createUser", handler.RegisterUser).Methods("POST")
-	r.HandleFunc(apipath+"/getUsers", handler.GetAllUsers).Methods("GET")
-	http.Handle("/", r)
-	http.ListenAndServe("localhost:8080", r)
-	fmt.Println("Running")
 }
