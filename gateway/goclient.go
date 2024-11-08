@@ -150,8 +150,9 @@ func readFirstFile(dirPath string) ([]byte, error) {
 func routers(contract *client.Contract){
 	r := mux.NewRouter()
 	handler := Handler{Contract: contract}
-	r.HandleFunc("/api/createUser", handler.RegisterUser).Methods("POST")
-	r.HandleFunc("/api/getUsers", handler.GetAllUsers).Methods("GET")
+	apipath:="/api/v2"
+	r.HandleFunc(apipath+"/createUser", handler.RegisterUser).Methods("POST")
+	r.HandleFunc(apipath+"/getUsers", handler.GetAllUsers).Methods("GET")
 	http.Handle("/", r)
 	http.ListenAndServe("localhost:8080", r)
 	fmt.Println("Running")

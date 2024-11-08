@@ -2,11 +2,13 @@ package utils
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"project/gateway/model"
 	"time"
 )
 type Response=model.Response
+type UserDto=model.UserDto
 func CreateResponse(w http.ResponseWriter, err error, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	status := "Success"
@@ -24,4 +26,17 @@ func CreateResponse(w http.ResponseWriter, err error, data interface{}) {
 	}
 	json.NewEncoder(w).Encode(response)
 
+}
+
+func ValidRequest(user UserDto)(error){
+	if user.Name==""{
+		return fmt.Errorf("name field should not be empty")
+	}
+	if user.Contact==""{
+		return fmt.Errorf("contact field should not be empty")
+	}
+	if user.Address==""{
+		return fmt.Errorf("user field should not be empty")
+	}
+	return nil
 }

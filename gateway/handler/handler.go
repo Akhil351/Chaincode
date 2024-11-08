@@ -7,6 +7,7 @@ import (
 	"project/gateway/model"
 	"project/gateway/utils"
 
+	"github.com/google/uuid"
 	"github.com/hyperledger/fabric-gateway/pkg/client"
 )
 
@@ -22,12 +23,17 @@ func (handler *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		utils.CreateResponse(w, err, nil)
 		return
 	}
-	_, err := handler.Contract.SubmitTransaction("RegisterUser", user.UserId, user.Name, user.Address, user.Contact)
+	err := utils.ValidRequest(user)
 	if err != nil {
 		utils.CreateResponse(w, err, nil)
 		return
 	}
-	utils.CreateResponse(w, err, "UserRegister Successfully")
+	 _,err = handler.Contract.SubmitTransaction("RegisterUser", uuid.New().String(), user.Name, user.Address, user.Contact)
+	if err != nil {
+		utils.CreateResponse(w, err, nil)
+		return
+	}
+	utils.CreateResponse(w, nil, "UserRegister Successfully")
 }
 
 func (handler *Handler) GetAllUsers(w http.ResponseWriter, r *http.Request) {
