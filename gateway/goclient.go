@@ -67,15 +67,8 @@ func main() {
 
 	network := gw.GetNetwork(channelName)
 	contract := network.GetContract(chaincodeName)
-	r := mux.NewRouter()
-	handler := Handler{Contract: contract}
-	r.HandleFunc("/api/createUser", handler.RegisterUser).Methods("POST")
-	r.HandleFunc("/api/getUsers", handler.GetAllUsers).Methods("GET")
-	http.Handle("/", r)
-	http.ListenAndServe("localhost:8080", r)
-	fmt.Println("Running")
+	routers(contract)
 }
-
 // newGrpcConnection creates a gRPC connection to the Gateway server.
 func newGrpcConnection() *grpc.ClientConn {
 	certificatePEM, err := os.ReadFile(tlsCertPath)
@@ -152,4 +145,14 @@ func readFirstFile(dirPath string) ([]byte, error) {
 	}
 
 	return os.ReadFile(path.Join(dirPath, fileNames[0]))
+}
+
+func routers(contract *client.Contract){
+	r := mux.NewRouter()
+	handler := Handler{Contract: contract}
+	r.HandleFunc("/api/createUser", handler.RegisterUser).Methods("POST")
+	r.HandleFunc("/api/getUsers", handler.GetAllUsers).Methods("GET")
+	http.Handle("/", r)
+	http.ListenAndServe("localhost:8080", r)
+	fmt.Println("Running")
 }
