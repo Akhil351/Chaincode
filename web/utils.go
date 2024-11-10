@@ -2,9 +2,12 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/jinzhu/copier"
 )
 
 func CreateResponse(w http.ResponseWriter, err error, data interface{}) {
@@ -33,8 +36,19 @@ func ValidRequest(user UserDto) error {
 	if user.Contact == "" {
 		return fmt.Errorf("contact field should not be empty")
 	}
+	if len(user.Contact) < 10 || len(user.Contact) > 15 {
+		return errors.New("phone number should be between 10 and 15 digits")
+	}
 	if user.Address == "" {
-		return fmt.Errorf("user field should not be empty")
+		return fmt.Errorf("address field should not be empty")
+	}
+	if user.Email == "" {
+		return errors.New("email field should not be empty")
 	}
 	return nil
+}
+
+func ConvertToDto[S any, T any](source S, destination T) T {
+	copier.Copy(&destination, source)
+	return destination
 }
