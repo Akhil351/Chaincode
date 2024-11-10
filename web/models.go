@@ -12,7 +12,7 @@ type UserDto struct {
 	Email    string `json:"email"`
 	Address  string `json:"address"`
 	Contact  string `json:"contact"`
-	Password string `json:"password"`
+	Password string `json:"password,omitempty"`
 }
 
 type User struct {
@@ -52,7 +52,7 @@ type TransactionDto struct {
 }
 
 type Transaction struct {
-	Id          string  `json:"id"`
+	Id          string  `gorm:"primary_key" json:"id"`
 	PropertyId  string  `json:"property_id"`
 	BuyerEmail  string  `json:"buyer_email"`
 	SellerEmail string  `json:"seller_email"`

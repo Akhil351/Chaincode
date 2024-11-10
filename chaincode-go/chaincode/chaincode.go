@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"time"
 
-	"github.com/google/uuid"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
@@ -41,7 +41,7 @@ type RealEstate struct {
 	contractapi.Contract
 }
 
-func (r *RealEstate) RegisterUser(ctx contractapi.TransactionContextInterface, userId string, name string, email string, address string, contact string,password string) error {
+func (r *RealEstate) RegisterUser(ctx contractapi.TransactionContextInterface, userId string, name string, email string, address string, contact string, password string) error {
 	compositeIndexName := "userType~userEmail"
 	userKey, err := ctx.GetStub().CreateCompositeKey(compositeIndexName, []string{"USER", email})
 	if err != nil {
@@ -57,7 +57,7 @@ func (r *RealEstate) RegisterUser(ctx contractapi.TransactionContextInterface, u
 		log.Println("User already exists")
 		return errors.New("User already exists")
 	}
-	user := User{UserId: userId, Name: name, Email: email, Address: address, Contact: contact,Password: password}
+	user := User{UserId: userId, Name: name, Email: email, Address: address, Contact: contact, Password: password}
 	userJson, err := json.Marshal(user)
 	if err != nil {
 		log.Println("failed to convert user struct to json")
@@ -98,34 +98,41 @@ func (r *RealEstate) RegisterProperty(ctx contractapi.TransactionContextInterfac
 
 }
 
-func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, propertyId string, buyerEmail string, sellerEmail string, price float64, date string) error {
+func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, transactionId string, propertyId string, buyerEmail string, sellerEmail string) error {
 	compositeIndexName := "propertyType~propertyId"
 	propertyKey, err := ctx.GetStub().CreateCompositeKey(compositeIndexName, []string{"PROPERTY", propertyId})
 	if err != nil {
+		log.Print("failed to create composite key for property")
 		return errors.New("failed to create composite key for property")
 	}
 
 	propertyBytes, err := ctx.GetStub().GetState(propertyKey)
 	if err != nil {
+		log.Println("failed to read property from world state")
 		return errors.New("failed to read property from world state")
 	}
 	if propertyBytes == nil {
+		log.Println("property not found")
 		return errors.New("property not found")
 	}
 
 	var property Property
 	err = json.Unmarshal(propertyBytes, &property)
 	if err != nil {
+		log.Println("failed to unmarshal property")
 		return errors.New("failed to unmarshal property")
 	}
 
 	if !property.IsListed {
+		log.Println("property is not listed for sale")
 		return errors.New("property is not listed for sale")
 	}
 	if property.OwnerEmail != sellerEmail {
+		log.Println("seller is not the current owner of the property")
 		return errors.New("seller is not the current owner of the property")
 	}
 	if property.OwnerEmail == buyerEmail {
+		log.Println("buyer cannot be the current owner")
 		return errors.New("buyer cannot be the current owner")
 	}
 
@@ -134,40 +141,43 @@ func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, pr
 
 	updatedPropertyJson, err := json.Marshal(property)
 	if err != nil {
+		log.Println("failed to marshal updated property")
 		return errors.New("failed to marshal updated property")
 	}
 	err = ctx.GetStub().PutState(propertyKey, updatedPropertyJson)
 	if err != nil {
+		log.Println("failed to update property in world state")
 		return errors.New("failed to update property in world state")
 	}
 
 	transactionCompositeIndexName := "transactionType~transactionId"
-	transactionId := uuid.New().String()
 	transactionKey, err := ctx.GetStub().CreateCompositeKey(transactionCompositeIndexName, []string{"TRANSACTION", transactionId})
 	if err != nil {
+		log.Println("failed to create composite key for transaction")
 		return errors.New("failed to create composite key for transaction")
 	}
-
+	currentTime := time.Now()
 	transaction := Transaction{
 		Id:          transactionId,
 		PropertyId:  propertyId,
 		BuyerEmail:  buyerEmail,
 		SellerEmail: sellerEmail,
-		Amount:      price,
-		Date:        date,
+		Amount:      property.Price,
+		Date:        currentTime.Format("02-Jan-2006 03:04:05 PM"),
 		Status:      "Completed",
 	}
 
 	transactionJson, err := json.Marshal(transaction)
 	if err != nil {
+		log.Println("failed to marshal transaction")
 		return errors.New("failed to marshal transaction")
 	}
 
 	err = ctx.GetStub().PutState(transactionKey, transactionJson)
 	if err != nil {
+		log.Println("failed to save transaction to world state")
 		return errors.New("failed to save transaction to world state")
 	}
-
 	return nil
 }
 

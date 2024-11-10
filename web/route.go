@@ -26,7 +26,7 @@ func Routers(contract *client.Contract) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	DB.AutoMigrate(&User{},&Property{})
+	DB.AutoMigrate(&User{},&Property{},&Transaction{})
 	log.Println("Database Connected ")
 	log.Println("Starting server...")
 	router := mux.NewRouter()
@@ -40,6 +40,8 @@ func Routers(contract *client.Contract) {
 	router.Handle(apipath+"/getUsers", chain.ThenFunc(handler.GetAllUsers)).Methods("GET")
 	router.Handle(apipath+"/registerProperty", chain.ThenFunc(handler.RegisterProperty)).Methods("POST")
 	router.Handle(apipath+"/getProperties", chain.ThenFunc(handler.GetAllProperty)).Methods("GET")
+	router.Handle(apipath+"/sellProperty", chain.ThenFunc(handler.BuyProperty)).Methods("GET")
+	router.Handle(apipath+"/getTransactions", chain.ThenFunc(handler.GetAllTransaction)).Methods("GET")
 	log.Println("Listening in port 8080")
 	http.ListenAndServe("localhost:8080", router)
 }

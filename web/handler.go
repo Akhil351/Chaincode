@@ -192,23 +192,22 @@ func (handler *Handler) RegisterProperty(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	propertyId := "p" + uuid.New().String()
-	ownerEmail:=claims.Email
-	_, err = handler.Contract.SubmitTransaction("RegisterProperty", propertyId, property.Title, property.Location, fmt.Sprintf("%f", property.Size), ownerEmail, fmt.Sprintf("%f", property.Price),strconv.FormatBool(property.IsListed))
+	ownerEmail := claims.Email
+	_, err = handler.Contract.SubmitTransaction("RegisterProperty", propertyId, property.Title, property.Location, fmt.Sprintf("%f", property.Size), ownerEmail, fmt.Sprintf("%f", property.Price), strconv.FormatBool(property.IsListed))
 	if err != nil {
 		log.Println("error in chaincode")
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
 	}
-    savedProperty := ConvertToDto(property, Property{})
-	savedProperty.Id=propertyId
-	savedProperty.OwnerEmail=ownerEmail
+	savedProperty := ConvertToDto(property, Property{})
+	savedProperty.Id = propertyId
+	savedProperty.OwnerEmail = ownerEmail
 	if err := handler.DB.Save(&savedProperty).Error; err != nil {
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
 	}
-	CreateResponse(w,nil,"PropertySuccessFully",http.StatusOK)
+	CreateResponse(w, nil, "PropertySuccessFully", http.StatusOK)
 }
-
 
 func (handler *Handler) GetAllProperty(w http.ResponseWriter, r *http.Request) {
 	data, err := handler.Contract.EvaluateTransaction("GetAllProperty")
@@ -217,7 +216,7 @@ func (handler *Handler) GetAllProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if data == nil {
-		CreateResponse(w, err, "no users are registred", http.StatusOK)
+		CreateResponse(w, err, "no properties are registred", http.StatusOK)
 		return
 	}
 	var property []PropertyDto
@@ -227,5 +226,90 @@ func (handler *Handler) GetAllProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	CreateResponse(w, err, property, http.StatusOK)
+
+}
+
+func (handler *Handler) BuyProperty(w http.ResponseWriter, r *http.Request) {
+	claims := r.Context().Value("claims").(*Claims)
+	propertyId := r.URL.Query().Get("propertyId")
+	buyerEmail := r.URL.Query().Get("buyerEmail")
+	var property Property
+	if err := handler.DB.Where("id=?", propertyId).First(&property).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			CreateResponse(w, errors.New("property not found"), nil, http.StatusNotFound)
+			return
+		}
+		CreateResponse(w, err, nil, http.StatusBadRequest)
+		return
+	}
+	if err := handler.DB.Where("email=?", buyerEmail).First(&User{}).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			CreateResponse(w, errors.New("buyer not registred"), nil, http.StatusNotFound)
+			return
+		}
+		CreateResponse(w, err, nil, http.StatusBadRequest)
+		return
+	}
+	if claims.Email != property.OwnerEmail {
+		CreateResponse(w, errors.New("seller is not the current owner of the property"), nil, http.StatusBadRequest)
+		return
+	}
+	if buyerEmail == property.OwnerEmail {
+		CreateResponse(w, errors.New("buyer cannot be the current owner"), nil, http.StatusBadRequest)
+		return
+	}
+
+	if !property.IsListed {
+		CreateResponse(w, errors.New("property is not listed for sale"), nil, http.StatusBadRequest)
+		return
+	}
+	transactionId := "t" + uuid.New().String()
+	_, err := handler.Contract.SubmitTransaction("BuyProperty", transactionId, propertyId, buyerEmail, claims.Email)
+	if err != nil {
+		log.Println("error in chaincode")
+		CreateResponse(w, err, nil, http.StatusBadRequest)
+		return
+	}
+	property.OwnerEmail = buyerEmail
+	property.IsListed = false
+	if err := handler.DB.Save(&property).Error; err != nil {
+		CreateResponse(w, err, nil, http.StatusBadRequest)
+		return
+	}
+	currentTime := time.Now()
+	transaction := Transaction{
+		Id:          transactionId,
+		PropertyId:  propertyId,
+		BuyerEmail:  buyerEmail,
+		SellerEmail: claims.Email,
+		Amount:      property.Price,
+		Date:        currentTime.Format("02-Jan-2006 03:04:05 PM"),
+		Status:      "Completed",
+	}
+	if err := handler.DB.Save(&transaction).Error; err != nil {
+		CreateResponse(w, err, nil, http.StatusBadRequest)
+		return
+	}
+	CreateResponse(w, nil, "TransactionSuccessfully", http.StatusOK)
+
+}
+
+func (handler *Handler) GetAllTransaction(w http.ResponseWriter, r *http.Request) {
+	data, err := handler.Contract.EvaluateTransaction("GetAllTransaction")
+	if err != nil {
+		CreateResponse(w, err, nil, http.StatusBadRequest)
+		return
+	}
+	if data == nil {
+		CreateResponse(w, err, "no transactions", http.StatusOK)
+		return
+	}
+	var transaction []TransactionDto
+	err = json.Unmarshal(data, &transaction)
+	if err != nil {
+		CreateResponse(w, fmt.Errorf("failed to decode users data: %v", err), nil, http.StatusBadRequest)
+		return
+	}
+	CreateResponse(w, err, transaction, http.StatusOK)
 
 }
