@@ -8,9 +8,11 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/hyperledger/fabric-gateway/pkg/client"
 	"github.com/joho/godotenv"
+	"github.com/justinas/alice"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
 func Routers(contract *client.Contract) {
 	err := godotenv.Load()
 	if err != nil {
@@ -24,15 +26,20 @@ func Routers(contract *client.Contract) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	DB.AutoMigrate(&User{})
+	DB.AutoMigrate(&User{},&Property{})
 	log.Println("Database Connected ")
 	log.Println("Starting server...")
 	router := mux.NewRouter()
 	log.Println("Setting up routes")
-	handler := &Handler{Contract: contract,DB: DB}
+	handler := &Handler{Contract: contract, DB: DB, JwtKey: os.Getenv("JWT_KEY")}
 	apipath := "/api/v2"
 	router.HandleFunc(apipath+"/createUser", handler.RegisterUser).Methods("POST")
-	router.HandleFunc(apipath+"/getUsers", handler.GetAllUsers).Methods("GET")
+	router.HandleFunc(apipath+"/login", handler.Login).Methods("POST")
+	// chain
+	chain := alice.New(handler.jwtMiddleware)
+	router.Handle(apipath+"/getUsers", chain.ThenFunc(handler.GetAllUsers)).Methods("GET")
+	router.Handle(apipath+"/registerProperty", chain.ThenFunc(handler.RegisterProperty)).Methods("POST")
+	router.Handle(apipath+"/getProperties", chain.ThenFunc(handler.GetAllProperty)).Methods("GET")
 	log.Println("Listening in port 8080")
 	http.ListenAndServe("localhost:8080", router)
 }

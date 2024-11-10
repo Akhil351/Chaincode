@@ -10,11 +10,12 @@ import (
 )
 
 type User struct {
-	UserId  string `json:"user_id"`
-	Email   string `json:"email"`
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	Contact string `json:"contact"`
+	UserId   string `json:"user_id"`
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Address  string `json:"address"`
+	Contact  string `json:"contact"`
+	Password string `json:"password"`
 }
 type Property struct {
 	Id         string  `json:"id"`
@@ -40,9 +41,9 @@ type RealEstate struct {
 	contractapi.Contract
 }
 
-func (r *RealEstate) RegisterUser(ctx contractapi.TransactionContextInterface, userId string, name string, email string, address string, contact string) error {
-	compositeIndexName := "userType~userId"
-	userKey, err := ctx.GetStub().CreateCompositeKey(compositeIndexName, []string{"USER", userId})
+func (r *RealEstate) RegisterUser(ctx contractapi.TransactionContextInterface, userId string, name string, email string, address string, contact string,password string) error {
+	compositeIndexName := "userType~userEmail"
+	userKey, err := ctx.GetStub().CreateCompositeKey(compositeIndexName, []string{"USER", email})
 	if err != nil {
 		log.Println("failed to create composite key for user ")
 		return errors.New("failed to create composite key for user ")
@@ -56,7 +57,7 @@ func (r *RealEstate) RegisterUser(ctx contractapi.TransactionContextInterface, u
 		log.Println("User already exists")
 		return errors.New("User already exists")
 	}
-	user := User{UserId: userId, Name: name, Email: email, Address: address, Contact: contact}
+	user := User{UserId: userId, Name: name, Email: email, Address: address, Contact: contact,Password: password}
 	userJson, err := json.Marshal(user)
 	if err != nil {
 		log.Println("failed to convert user struct to json")
@@ -172,7 +173,7 @@ func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, pr
 
 func (r *RealEstate) GetAllUsers(ctx contractapi.TransactionContextInterface) ([]User, error) {
 	var users []User
-	compositeIndexName := "userType~userId"
+	compositeIndexName := "userType~userEmail"
 	resultIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(compositeIndexName, []string{"USER"})
 	if err != nil {
 		return nil, errors.New("failed to get users")
