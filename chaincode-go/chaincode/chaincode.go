@@ -3,40 +3,68 @@ package chaincode
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"project/web"
+	"log"
 
+	"github.com/google/uuid"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
-type User = web.User
-type Property = web.Property
-type Transaction = web.Transaction
+type User struct {
+	UserId  string `json:"user_id"`
+	Email   string `json:"email"`
+	Name    string `json:"name"`
+	Address string `json:"address"`
+	Contact string `json:"contact"`
+}
+type Property struct {
+	Id         string  `json:"id"`
+	Title      string  `json:"title"`
+	Location   string  `json:"location"`
+	Size       float64 `json:"size"`
+	OwnerEmail string  `json:"current_owner_email"`
+	Price      float64 `json:"price"`
+	IsListed   bool    `json:"is_listed"`
+}
+
+type Transaction struct {
+	Id          string  `json:"id"`
+	PropertyId  string  `json:"property_id"`
+	BuyerEmail  string  `json:"buyer_email"`
+	SellerEmail string  `json:"seller_email"`
+	Amount      float64 `json:"amount"`
+	Date        string  `json:"date"`
+	Status      string  `json:"status"`
+}
 
 type RealEstate struct {
 	contractapi.Contract
 }
 
 func (r *RealEstate) RegisterUser(ctx contractapi.TransactionContextInterface, userId string, name string, email string, address string, contact string) error {
-	compositeIndexName := "userType~userEmail"
-	userKey, err := ctx.GetStub().CreateCompositeKey(compositeIndexName, []string{"USER",email})
+	compositeIndexName := "userType~userId"
+	userKey, err := ctx.GetStub().CreateCompositeKey(compositeIndexName, []string{"USER", userId})
 	if err != nil {
+		log.Println("failed to create composite key for user ")
 		return errors.New("failed to create composite key for user ")
 	}
 	userExists, err := ctx.GetStub().GetState(userKey)
 	if err != nil {
+		log.Println("failed to read user from world state")
 		return errors.New("failed to read user from world state")
 	}
 	if userExists != nil {
+		log.Println("User already exists")
 		return errors.New("User already exists")
 	}
 	user := User{UserId: userId, Name: name, Email: email, Address: address, Contact: contact}
 	userJson, err := json.Marshal(user)
 	if err != nil {
+		log.Println("failed to convert user struct to json")
 		return errors.New("failed to convert user struct to json")
 	}
 	err = ctx.GetStub().PutState(userKey, userJson)
 	if err != nil {
+		log.Println("failed to put user in world state")
 		return errors.New("failed to put user in world state")
 	}
 	return nil
@@ -113,20 +141,20 @@ func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, pr
 	}
 
 	transactionCompositeIndexName := "transactionType~transactionId"
-	transactionId := fmt.Sprintf("TXN-%s-%s-%s", sellerEmail, buyerEmail, propertyId)
+	transactionId := uuid.New().String()
 	transactionKey, err := ctx.GetStub().CreateCompositeKey(transactionCompositeIndexName, []string{"TRANSACTION", transactionId})
 	if err != nil {
 		return errors.New("failed to create composite key for transaction")
 	}
 
 	transaction := Transaction{
-		Id:         transactionId,
-		PropertyId: propertyId,
-		BuyerEmail:    buyerEmail,
-		SellerEmail:   sellerEmail,
-		Amount:     price,
-		Date:       date,
-		Status:     "Completed",
+		Id:          transactionId,
+		PropertyId:  propertyId,
+		BuyerEmail:  buyerEmail,
+		SellerEmail: sellerEmail,
+		Amount:      price,
+		Date:        date,
+		Status:      "Completed",
 	}
 
 	transactionJson, err := json.Marshal(transaction)
@@ -144,7 +172,7 @@ func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, pr
 
 func (r *RealEstate) GetAllUsers(ctx contractapi.TransactionContextInterface) ([]User, error) {
 	var users []User
-	compositeIndexName := "userType~userEmail"
+	compositeIndexName := "userType~userId"
 	resultIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(compositeIndexName, []string{"USER"})
 	if err != nil {
 		return nil, errors.New("failed to get users")

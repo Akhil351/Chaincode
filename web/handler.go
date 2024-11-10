@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -41,6 +42,7 @@ func (handler *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	userId := uuid.New().String()
 	_, err = handler.Contract.SubmitTransaction("RegisterUser", userId, user.Name, user.Email, user.Address, user.Contact)
 	if err != nil {
+		log.Println("error in chaincode")
 		CreateResponse(w, err, nil)
 		return
 	}
