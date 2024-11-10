@@ -69,6 +69,14 @@ func (handler *Handler) jwtMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		ctx := context.WithValue(r.Context(), "claims", claims)
+		if err := handler.DB.Where("email=?", claims.Email).First(&User{}).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				CreateResponse(w, errors.New("user not found"), nil, http.StatusUnauthorized)
+				return
+			}
+			CreateResponse(w, err, nil, http.StatusBadRequest)
+			return
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
