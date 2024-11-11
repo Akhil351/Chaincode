@@ -321,3 +321,35 @@ func (handler *Handler) GetAllTransaction(w http.ResponseWriter, r *http.Request
 	CreateResponse(w, err, transaction, http.StatusOK)
 
 }
+
+func (handler *Handler) UpdateFlag(w http.ResponseWriter, r *http.Request) {
+	claims := r.Context().Value("claims").(*Claims)
+	propertyId := r.URL.Query().Get("propertyId")
+	var property Property
+	if err := handler.DB.Where("id=?", propertyId).First(&property).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			CreateResponse(w, errors.New("property not found"), nil, http.StatusNotFound)
+			return
+		}
+		CreateResponse(w, err, nil, http.StatusBadRequest)
+		return
+	}
+
+	if claims.Email != property.OwnerEmail {
+		CreateResponse(w, errors.New("seller is not the current owner of the property"), nil, http.StatusBadRequest)
+		return
+	}
+	_, err := handler.Contract.SubmitTransaction("UpdateFlag", propertyId, claims.Email)
+	if err != nil {
+		log.Println("error in chaincode")
+		CreateResponse(w, err, nil, http.StatusBadRequest)
+		return
+	}
+	property.IsListed = true
+	if err := handler.DB.Save(&property).Error; err != nil {
+		CreateResponse(w, err, nil, http.StatusBadRequest)
+		return
+	}
+	CreateResponse(w, err, "Property Updated", http.StatusOK)
+
+}

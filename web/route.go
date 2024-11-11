@@ -42,6 +42,7 @@ func Routers(contract *client.Contract) {
 	router.Handle(apipath+"/getProperties", chain.ThenFunc(handler.GetAllProperty)).Methods("GET")
 	router.Handle(apipath+"/sellProperty", chain.ThenFunc(handler.BuyProperty)).Methods("GET")
 	router.Handle(apipath+"/getTransactions", chain.ThenFunc(handler.GetAllTransaction)).Methods("GET")
+	router.Handle(apipath+"/updateProperty", chain.ThenFunc(handler.UpdateFlag)).Methods("PUT")
 	log.Println("Listening in port 8080")
 	http.ListenAndServe("localhost:8080", router)
 }

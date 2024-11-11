@@ -97,6 +97,53 @@ func (r *RealEstate) RegisterProperty(ctx contractapi.TransactionContextInterfac
 	return nil
 
 }
+func (r *RealEstate) UpdateFlag(ctx contractapi.TransactionContextInterface, propertyId string, OwnerEmail string) error {
+	compositeIndexName := "propertyType~propertyId"
+	propertyKey, err := ctx.GetStub().CreateCompositeKey(compositeIndexName, []string{"PROPERTY", propertyId})
+	if err != nil {
+		log.Print("failed to create composite key for property")
+		return errors.New("failed to create composite key for property")
+	}
+
+	propertyBytes, err := ctx.GetStub().GetState(propertyKey)
+	if err != nil {
+		log.Println("failed to read property from world state")
+		return errors.New("failed to read property from world state")
+	}
+	if propertyBytes == nil {
+		log.Println("property not found")
+		return errors.New("property not found")
+	}
+	var property Property
+
+	err = json.Unmarshal(propertyBytes, &property)
+	if err != nil {
+		log.Println("failed to unmarshal property")
+		return errors.New("failed to unmarshal property")
+	}
+	if property.IsListed {
+		return errors.New("property already listed for sale")
+	}
+	if property.OwnerEmail != OwnerEmail {
+		log.Println("seller is not the current owner of the property")
+		return errors.New("seller is not the current owner of the property")
+	}
+
+	property.IsListed = true
+
+	updatedPropertyJson, err := json.Marshal(property)
+	if err != nil {
+		log.Println("failed to marshal updated property")
+		return errors.New("failed to marshal updated property")
+	}
+	err = ctx.GetStub().PutState(propertyKey, updatedPropertyJson)
+	if err != nil {
+		log.Println("failed to update property in world state")
+		return errors.New("failed to update property in world state")
+	}
+	return nil
+
+}
 
 func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, transactionId string, propertyId string, buyerEmail string, sellerEmail string) error {
 	compositeIndexName := "propertyType~propertyId"
