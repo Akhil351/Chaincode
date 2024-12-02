@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jinzhu/copier"
@@ -44,6 +45,9 @@ func ValidRequest(user UserDto) error {
 	}
 	if user.Email == "" {
 		return errors.New("email field should not be empty")
+	}
+	if !strings.Contains(user.Email,"@gmail.com"){
+		return errors.New("email must be @gmail.com address")
 	}
 	return nil
 }
