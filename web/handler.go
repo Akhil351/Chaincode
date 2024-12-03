@@ -25,7 +25,7 @@ type Handler struct {
 }
 
 func (handler *Handler) generateToken(user User) (string, error) {
-	expirationTime := time.Now().Add(5*time.Minute)
+	expirationTime := time.Now().Add(5 * time.Minute)
 	claims := &Claims{
 		UserId:   user.UserId,
 		Name:     user.Name,
@@ -201,7 +201,7 @@ func (handler *Handler) RegisterProperty(w http.ResponseWriter, r *http.Request)
 	}
 	propertyId := "p" + uuid.New().String()
 	ownerEmail := claims.Email
-	_, err = handler.Contract.SubmitTransaction("RegisterProperty", propertyId, property.Title, property.Location, strconv.FormatFloat(property.Size,'f',2,64), ownerEmail, strconv.FormatFloat(property.Price,'f',2,64), strconv.FormatBool(property.IsListed))
+	_, err = handler.Contract.SubmitTransaction("RegisterProperty", propertyId, property.Title, property.Location, strconv.FormatFloat(property.Size, 'f', 2, 64), ownerEmail, strconv.FormatFloat(property.Price, 'f', 2, 64), strconv.FormatBool(property.IsListed))
 	if err != nil {
 		log.Println("error in chaincode")
 		CreateResponse(w, err, nil, http.StatusBadRequest)
@@ -283,22 +283,14 @@ func (handler *Handler) BuyProperty(w http.ResponseWriter, r *http.Request) {
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
 	}
-	var transaction Transaction
-	err = json.Unmarshal(data, &transaction)
-	if err != nil {
-		CreateResponse(w, fmt.Errorf("failed to decode users data: %v", err), nil, http.StatusBadRequest)
-		return
-	}
-	if err := handler.DB.Save(&transaction).Error; err != nil {
-		CreateResponse(w, err, nil, http.StatusBadRequest)
-		return
-	}
-	CreateResponse(w, nil, transaction.Id, http.StatusOK)
+
+	CreateResponse(w, nil, string(data), http.StatusOK)
 
 }
 
 func (handler *Handler) GetAllTransaction(w http.ResponseWriter, r *http.Request) {
-	data, err := handler.Contract.EvaluateTransaction("GetAllTransaction")
+	transactionId := r.URL.Query().Get("transactionId")
+	data, err := handler.Contract.EvaluateTransaction("GetAllTransaction",transactionId)
 	if err != nil {
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
@@ -349,23 +341,3 @@ func (handler *Handler) UpdateFlag(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (handler *Handler) GetTransactionById(w http.ResponseWriter,r *http.Request){
-	transactionId := r.URL.Query().Get("transactionId")
-	data, err := handler.Contract.EvaluateTransaction("GetTransactionById", transactionId)
-	if err != nil {
-		CreateResponse(w, err, nil, http.StatusBadRequest)
-		return
-	}
-	if data == nil {
-		CreateResponse(w, err, "no transactions", http.StatusOK)
-		return
-	}
-	var transaction Transaction
-	err = json.Unmarshal(data, &transaction)
-	if err != nil {
-		CreateResponse(w, fmt.Errorf("failed to decode transaction data: %v", err), nil, http.StatusBadRequest)
-		return
-	}
-	CreateResponse(w, err, transaction, http.StatusOK)
-
-}

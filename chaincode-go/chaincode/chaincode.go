@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
+	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
@@ -165,7 +167,7 @@ func (r *RealEstate) UpdateFlag(ctx contractapi.TransactionContextInterface, pro
 	if splitKeyErr != nil {
 		return fmt.Errorf("error splitting key: %s", splitKeyErr.Error())
 	}
-	
+
 	if keyParts[7] == "true" {
 		return errors.New("property already listed for sale")
 	}
@@ -176,12 +178,12 @@ func (r *RealEstate) UpdateFlag(ctx contractapi.TransactionContextInterface, pro
 
 	keyParts[7] = "true"
 
-    err = ctx.GetStub().DelState(queryResponse.Key)
-    if err != nil {
-        return errors.New("failed to delete old property state")
-    }
-	
-	err=r.RegisterProperty(ctx,propertyId,keyParts[2],keyParts[3],keyParts[4],keyParts[5],keyParts[6],keyParts[7])
+	err = ctx.GetStub().DelState(queryResponse.Key)
+	if err != nil {
+		return errors.New("failed to delete old property state")
+	}
+
+	err = r.RegisterProperty(ctx, propertyId, keyParts[2], keyParts[3], keyParts[4], keyParts[5], keyParts[6], keyParts[7])
 	if err != nil {
 		return err
 	}
@@ -189,6 +191,105 @@ func (r *RealEstate) UpdateFlag(ctx contractapi.TransactionContextInterface, pro
 
 }
 
+func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, propertyId string, buyerEmail string, sellerEmail string) (string, error) {
+	propertyBytes, err := ctx.GetStub().GetStateByPartialCompositeKey(propertCompositeKey, []string{"property", propertyId})
+	if err != nil {
+		log.Println("failed to read property from world state")
+		return "", errors.New("failed to read property from world state")
+	}
+	if !propertyBytes.HasNext() {
+		log.Println("property not found")
+		return "", errors.New("property not found")
+	}
+	queryResponse, err := propertyBytes.Next()
+	if err != nil {
+		return "", errors.New("failed to iterate over properties")
+	}
+	_, keyParts, splitKeyErr := ctx.GetStub().SplitCompositeKey(queryResponse.Key)
+	if splitKeyErr != nil {
+		return "", fmt.Errorf("error splitting key: %s", splitKeyErr.Error())
+	}
 
+	if keyParts[7] == "false" {
+		log.Println("property is not listed for sale")
+		return "", errors.New("property is not listed for sale")
+	}
+	if keyParts[5] != sellerEmail {
+		log.Println("seller is not the current owner of the property")
+		return "", errors.New("seller is not the current owner of the property")
+	}
+	if keyParts[5] == buyerEmail {
+		log.Println("buyer cannot be the current owner")
+		return "", errors.New("buyer cannot be the current owner")
+	}
 
+	keyParts[5] = buyerEmail
+	keyParts[7] = "false"
 
+	err = ctx.GetStub().DelState(queryResponse.Key)
+	if err != nil {
+		return "", errors.New("failed to delete old property state")
+	}
+
+	err = r.RegisterProperty(ctx, propertyId, keyParts[2], keyParts[3], keyParts[4], keyParts[5], keyParts[6], keyParts[7])
+	if err != nil {
+		return "", err
+	}
+
+	transactionId := ctx.GetStub().GetTxID()
+	currentTime := time.Now()
+	transactionKey, err := ctx.GetStub().CreateCompositeKey(transactionCompositeKey, []string{"transaction", transactionId, propertyId, buyerEmail, sellerEmail, keyParts[6], currentTime.Format("2006-01-02 15:04:05"), "Completed"})
+	if err != nil {
+		log.Println("failed to create composite key for transaction")
+		return "", errors.New("failed to create composite key for transaction")
+	}
+
+	err = ctx.GetStub().PutState(transactionKey, []byte{0x00})
+	if err != nil {
+		log.Println("failed to save transaction to world state")
+		return "", errors.New("failed to save transaction to world state")
+	}
+	return transactionId, nil
+}
+
+func (r *RealEstate) GetAllTransaction(ctx contractapi.TransactionContextInterface, transactionId string) ([]Transaction, error) {
+	var resultIterator shim.StateQueryIteratorInterface
+	var err error
+	var transactions []Transaction
+	if transactionId != "" {
+		resultIterator, err = ctx.GetStub().GetStateByPartialCompositeKey(transactionCompositeKey, []string{"transaction", transactionId})
+	} else {
+		resultIterator, err = ctx.GetStub().GetStateByPartialCompositeKey(transactionCompositeKey, []string{"transaction"})
+	}
+
+	if err != nil {
+		return nil, errors.New("failed to get transactions")
+	}
+	defer resultIterator.Close()
+
+	for resultIterator.HasNext() {
+		queryResponse, err := resultIterator.Next()
+		if err != nil {
+			return nil, errors.New("failed to iterate over transactions")
+		}
+		_, keyParts, splitKeyErr := ctx.GetStub().SplitCompositeKey(queryResponse.Key)
+		if splitKeyErr != nil {
+			return nil, fmt.Errorf("error splitting key: %s", splitKeyErr.Error())
+		}
+		amount, err := strconv.ParseFloat(keyParts[5], 64)
+		if err != nil {
+			return nil, err
+		}
+		transaction := Transaction{
+			Id:          keyParts[1],
+			PropertyId:  keyParts[2],
+			BuyerEmail:  keyParts[3],
+			SellerEmail: keyParts[4],
+			Amount:      amount,
+			Date:        keyParts[6],
+			Status:      keyParts[7],
+		}
+		transactions = append(transactions, transaction)
+	}
+	return transactions, nil
+}

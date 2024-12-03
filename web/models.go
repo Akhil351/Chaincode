@@ -51,15 +51,7 @@ type TransactionDto struct {
 	Status      string  `json:"status"`
 }
 
-type Transaction struct {
-	Id          string  `gorm:"primary_key" json:"id"`
-	PropertyId  string  `json:"property_id"`
-	BuyerEmail  string  `json:"buyer_email"`
-	SellerEmail string  `json:"seller_email"`
-	Amount      float64 `json:"amount"`
-	Date        string  `json:"date"`
-	Status      string  `json:"status"`
-}
+
 
 type Response struct {
 	Status    string      `json:"status"`
