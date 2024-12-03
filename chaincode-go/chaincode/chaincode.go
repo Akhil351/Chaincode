@@ -57,7 +57,6 @@ func (r *RealEstate) RegisterUser(ctx contractapi.TransactionContextInterface, u
 		return errors.New("failed to put user in world state")
 	}
 	return nil
-
 }
 
 func (r *RealEstate) GetAllUsers(ctx contractapi.TransactionContextInterface) ([]User, error) {
@@ -89,6 +88,7 @@ func (r *RealEstate) GetAllUsers(ctx contractapi.TransactionContextInterface) ([
 	}
 	return users, nil
 }
+
 func (r *RealEstate) RegisterProperty(ctx contractapi.TransactionContextInterface, propertyId string, title string, location string, size string, ownerEmail string, price string, isListed string) error {
 	propertyKey, err := ctx.GetStub().CreateCompositeKey(propertCompositeKey, []string{"property", propertyId, title, location, size, ownerEmail, price, isListed})
 	if err != nil {
@@ -145,3 +145,50 @@ func (r *RealEstate) GetAllProperty(ctx contractapi.TransactionContextInterface)
 	}
 	return properties, nil
 }
+
+func (r *RealEstate) UpdateFlag(ctx contractapi.TransactionContextInterface, propertyId string, OwnerEmail string) error {
+
+	propertyBytes, err := ctx.GetStub().GetStateByPartialCompositeKey(propertCompositeKey, []string{"property", propertyId})
+	if err != nil {
+		log.Println("failed to read property from world state")
+		return errors.New("failed to read property from world state")
+	}
+	if !propertyBytes.HasNext() {
+		log.Println("property not found")
+		return errors.New("property not found")
+	}
+	queryResponse, err := propertyBytes.Next()
+	if err != nil {
+		return errors.New("failed to iterate over properties")
+	}
+	_, keyParts, splitKeyErr := ctx.GetStub().SplitCompositeKey(queryResponse.Key)
+	if splitKeyErr != nil {
+		return fmt.Errorf("error splitting key: %s", splitKeyErr.Error())
+	}
+	
+	if keyParts[7] == "true" {
+		return errors.New("property already listed for sale")
+	}
+	if keyParts[5] != OwnerEmail {
+		log.Println("seller is not the current owner of the property")
+		return errors.New("seller is not the current owner of the property")
+	}
+
+	keyParts[7] = "true"
+
+    err = ctx.GetStub().DelState(queryResponse.Key)
+    if err != nil {
+        return errors.New("failed to delete old property state")
+    }
+	
+	err=r.RegisterProperty(ctx,propertyId,keyParts[2],keyParts[3],keyParts[4],keyParts[5],keyParts[6],keyParts[7])
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
+
+
+
+
