@@ -201,7 +201,7 @@ func (handler *Handler) RegisterProperty(w http.ResponseWriter, r *http.Request)
 	}
 	propertyId := "p" + uuid.New().String()
 	ownerEmail := claims.Email
-	_, err = handler.Contract.SubmitTransaction("RegisterProperty", propertyId, property.Title, property.Location, fmt.Sprintf("%f", property.Size), ownerEmail, fmt.Sprintf("%f", property.Price), strconv.FormatBool(property.IsListed))
+	_, err = handler.Contract.SubmitTransaction("RegisterProperty", propertyId, property.Title, property.Location, strconv.FormatFloat(property.Size,'f',2,64), ownerEmail, strconv.FormatFloat(property.Price,'f',2,64), strconv.FormatBool(property.IsListed))
 	if err != nil {
 		log.Println("error in chaincode")
 		CreateResponse(w, err, nil, http.StatusBadRequest)

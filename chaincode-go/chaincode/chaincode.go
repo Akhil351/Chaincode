@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
@@ -41,6 +42,8 @@ type RealEstate struct {
 }
 
 const userCompositeKey = "user~userId~name~email~address~contact~password"
+const propertCompositeKey = "property~propertyId~title~location~size~ownerEmail~price~isListed"
+const transactionCompositeKey = "transaction~transactionId~propertyId~buyerEmail~sellerEmail~amount~date~status"
 
 func (r *RealEstate) RegisterUser(ctx contractapi.TransactionContextInterface, userId string, name string, email string, address string, contact string, password string) error {
 	userKey, err := ctx.GetStub().CreateCompositeKey(userCompositeKey, []string{"user", userId, name, email, address, contact, password})
@@ -85,4 +88,60 @@ func (r *RealEstate) GetAllUsers(ctx contractapi.TransactionContextInterface) ([
 		users = append(users, user)
 	}
 	return users, nil
+}
+func (r *RealEstate) RegisterProperty(ctx contractapi.TransactionContextInterface, propertyId string, title string, location string, size string, ownerEmail string, price string, isListed string) error {
+	propertyKey, err := ctx.GetStub().CreateCompositeKey(propertCompositeKey, []string{"property", propertyId, title, location, size, ownerEmail, price, isListed})
+	if err != nil {
+		return errors.New("failed to create composite key for property")
+	}
+	err = ctx.GetStub().PutState(propertyKey, []byte{0x00})
+	if err != nil {
+		return errors.New("failed to put property in world state")
+	}
+	return nil
+
+}
+
+func (r *RealEstate) GetAllProperty(ctx contractapi.TransactionContextInterface) ([]Property, error) {
+	var properties []Property
+	resultIterator, err := ctx.GetStub().GetStateByPartialCompositeKey(propertCompositeKey, []string{"property"})
+	if err != nil {
+		return nil, errors.New("failed to get properties")
+	}
+	defer resultIterator.Close()
+
+	for resultIterator.HasNext() {
+		queryResponse, err := resultIterator.Next()
+		if err != nil {
+			return nil, errors.New("failed to iterate over properties")
+		}
+		_, keyParts, splitKeyErr := ctx.GetStub().SplitCompositeKey(queryResponse.Key)
+		if splitKeyErr != nil {
+			return nil, fmt.Errorf("error splitting key: %s", splitKeyErr.Error())
+		}
+		size, err := strconv.ParseFloat(keyParts[4], 64)
+		if err != nil {
+			return nil, err
+		}
+		price, err := strconv.ParseFloat(keyParts[6], 64)
+		if err != nil {
+			return nil, err
+		}
+		isListed, err := strconv.ParseBool(keyParts[7])
+		if err != nil {
+			return nil, err
+		}
+		property := Property{
+			Id:         keyParts[1],
+			Title:      keyParts[2],
+			Location:   keyParts[3],
+			Size:       size,
+			OwnerEmail: keyParts[5],
+			Price:      price,
+			IsListed:   isListed,
+		}
+
+		properties = append(properties, property)
+	}
+	return properties, nil
 }
