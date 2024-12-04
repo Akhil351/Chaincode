@@ -167,15 +167,6 @@ func (r *RealEstate) UpdateFlag(ctx contractapi.TransactionContextInterface, pro
 	if splitKeyErr != nil {
 		return fmt.Errorf("error splitting key: %s", splitKeyErr.Error())
 	}
-
-	if keyParts[7] == "true" {
-		return errors.New("property already listed for sale")
-	}
-	if keyParts[5] != OwnerEmail {
-		log.Println("seller is not the current owner of the property")
-		return errors.New("seller is not the current owner of the property")
-	}
-
 	keyParts[7] = "true"
 
 	err = ctx.GetStub().DelState(queryResponse.Key)
@@ -209,33 +200,7 @@ func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, pr
 	if splitKeyErr != nil {
 		return "", fmt.Errorf("error splitting key: %s", splitKeyErr.Error())
 	}
-
-	if keyParts[7] == "false" {
-		log.Println("property is not listed for sale")
-		return "", errors.New("property is not listed for sale")
-	}
-	if keyParts[5] != sellerEmail {
-		log.Println("seller is not the current owner of the property")
-		return "", errors.New("seller is not the current owner of the property")
-	}
-	if keyParts[5] == buyerEmail {
-		log.Println("buyer cannot be the current owner")
-		return "", errors.New("buyer cannot be the current owner")
-	}
-
-	keyParts[5] = buyerEmail
-	keyParts[7] = "false"
-
-	err = ctx.GetStub().DelState(queryResponse.Key)
-	if err != nil {
-		return "", errors.New("failed to delete old property state")
-	}
-
-	err = r.RegisterProperty(ctx, propertyId, keyParts[2], keyParts[3], keyParts[4], keyParts[5], keyParts[6], keyParts[7])
-	if err != nil {
-		return "", err
-	}
-
+	
 	transactionId := ctx.GetStub().GetTxID()
 	currentTime := time.Now()
 	transactionKey, err := ctx.GetStub().CreateCompositeKey(transactionCompositeKey, []string{"transaction", transactionId, propertyId, buyerEmail, sellerEmail, keyParts[6], currentTime.Format("2006-01-02 15:04:05"), "Completed"})
@@ -248,6 +213,19 @@ func (r *RealEstate) BuyProperty(ctx contractapi.TransactionContextInterface, pr
 	if err != nil {
 		log.Println("failed to save transaction to world state")
 		return "", errors.New("failed to save transaction to world state")
+	}
+	
+	keyParts[5] = buyerEmail
+	keyParts[7] = "false"
+
+	err = ctx.GetStub().DelState(queryResponse.Key)
+	if err != nil {
+		return "", errors.New("failed to delete old property state")
+	}
+
+	err = r.RegisterProperty(ctx, propertyId, keyParts[2], keyParts[3], keyParts[4], keyParts[5], keyParts[6], keyParts[7])
+	if err != nil {
+		return "", err
 	}
 	return transactionId, nil
 }
