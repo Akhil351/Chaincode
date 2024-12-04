@@ -258,17 +258,16 @@ func (handler *Handler) BuyProperty(w http.ResponseWriter, r *http.Request) {
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
 	}
+	if !property.IsListed{
+		CreateResponse(w, errors.New("property is not listed for sale"), nil, http.StatusBadRequest)
+		return
+	}
 	if claims.Email != property.OwnerEmail {
 		CreateResponse(w, errors.New("seller is not the current owner of the property"), nil, http.StatusBadRequest)
 		return
 	}
 	if buyerEmail == property.OwnerEmail {
 		CreateResponse(w, errors.New("buyer cannot be the current owner"), nil, http.StatusBadRequest)
-		return
-	}
-
-	if !property.IsListed {
-		CreateResponse(w, errors.New("property is not listed for sale"), nil, http.StatusBadRequest)
 		return
 	}
 	data, err := handler.Contract.SubmitTransaction("BuyProperty", propertyId, buyerEmail, claims.Email)
@@ -319,6 +318,11 @@ func (handler *Handler) UpdateFlag(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		CreateResponse(w, err, nil, http.StatusBadRequest)
+		return
+	}
+
+	if property.IsListed{
+		CreateResponse(w, errors.New("property already listed for sale"), nil, http.StatusBadRequest)
 		return
 	}
 
