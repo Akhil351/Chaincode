@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -9,8 +10,8 @@ import (
 	"github.com/hyperledger/fabric-gateway/pkg/client"
 	"github.com/joho/godotenv"
 	"github.com/justinas/alice"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func Routers(contract *client.Contract) {
@@ -18,20 +19,27 @@ func Routers(contract *client.Contract) {
 	if err != nil {
 		log.Fatalf("Err loading .env file")
 	}
-	connStr := os.Getenv("DATA_PSQL_URL")
-	if len(connStr) == 0 {
-		log.Fatal("DATA_PSQL_URL environment variable is nit set")
+	mongoUri := os.Getenv("MONGO_URI")
+	if len(mongoUri) == 0 {
+		log.Fatal("MONGO_URI environment variable is no set")
 	}
-	DB, err := gorm.Open(postgres.Open(connStr), &gorm.Config{})
+	clientOptions := options.Client().ApplyURI(mongoUri)
+	client, err := mongo.Connect(context.Background(), clientOptions)
 	if err != nil {
 		log.Fatal(err)
 	}
-	DB.AutoMigrate(&User{},&Property{})
+	err = client.Ping(context.Background(), nil)
+	if err != nil {
+		log.Fatal("Could not connect to MongoDB:", err)
+	}
+	db := client.Database("Chaincode")
+	userCollection := db.Collection(os.Getenv("USER_COLLECTION"))
+	propertyCollection := db.Collection(os.Getenv("PROPERTY_COLLECTION"))
 	log.Println("Database Connected ")
 	log.Println("Starting server...")
 	router := mux.NewRouter()
 	log.Println("Setting up routes")
-	handler := &Handler{Contract: contract, DB: DB, JwtKey: os.Getenv("JWT_KEY")}
+	handler := &Handler{Contract: contract, UserCollection: userCollection, PropertyCollection: propertyCollection, JwtKey: os.Getenv("JWT_KEY")}
 	apipath := "/api/v2"
 	router.HandleFunc(apipath+"/createUser", handler.RegisterUser).Methods("POST")
 	router.HandleFunc(apipath+"/login", handler.Login).Methods("POST")

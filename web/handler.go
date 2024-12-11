@@ -14,14 +14,16 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/hyperledger/fabric-gateway/pkg/client"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 type Handler struct {
-	Contract *client.Contract
-	DB       *gorm.DB
-	JwtKey   string
+	Contract           *client.Contract
+	UserCollection     *mongo.Collection
+	PropertyCollection *mongo.Collection
+	JwtKey             string
 }
 
 func (handler *Handler) generateToken(user User) (string, error) {
@@ -60,7 +62,6 @@ func (handler *Handler) jwtMiddleware(next http.Handler) http.Handler {
 				CreateResponse(w, errors.New("invalid token signature"), nil, http.StatusUnauthorized)
 				return
 			}
-
 			CreateResponse(w, errors.New("invalid token"), nil, http.StatusBadRequest)
 			return
 		}
@@ -68,15 +69,17 @@ func (handler *Handler) jwtMiddleware(next http.Handler) http.Handler {
 			CreateResponse(w, errors.New("invalid token"), nil, http.StatusUnauthorized)
 			return
 		}
-		ctx := context.WithValue(r.Context(), "claims", claims)
-		if err := handler.DB.Where("email=?", claims.Email).First(&User{}).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
+		filter := bson.M{"email": claims.Email}
+		err = handler.UserCollection.FindOne(context.Background(), filter).Err()
+		if err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
 				CreateResponse(w, errors.New("user not found"), nil, http.StatusUnauthorized)
 				return
 			}
 			CreateResponse(w, err, nil, http.StatusBadRequest)
 			return
 		}
+		ctx := context.WithValue(r.Context(), "claims", claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -92,9 +95,13 @@ func (handler *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
 	}
+	filter := bson.M{"$or": []bson.M{
+		{"email": user.Email},
+		{"contact": user.Contact},
+	}}
 	var existingUser User
-	if err := handler.DB.Where("email=? OR contact=?", user.Email, user.Contact).First(&existingUser).Error; err != nil {
-		if err != gorm.ErrRecordNotFound {
+	if err = handler.UserCollection.FindOne(context.Background(), filter).Decode(&existingUser); err != nil {
+		if err != mongo.ErrNoDocuments {
 			CreateResponse(w, err, nil, http.StatusBadRequest)
 			return
 		}
@@ -118,7 +125,8 @@ func (handler *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 	savedUser := ConvertToDto(user, User{})
 	savedUser.UserId = userId
 	savedUser.Password = string(bcryptPassword)
-	if err := handler.DB.Save(&savedUser).Error; err != nil {
+	_, err = handler.UserCollection.InsertOne(context.Background(), savedUser)
+	if err != nil {
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
 	}
@@ -153,8 +161,9 @@ func (handler *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var user User
-	if err := handler.DB.Where("email=?", request.Email).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+	filter := bson.M{"email": request.Email}
+	if err := handler.UserCollection.FindOne(context.Background(), filter).Decode(&user); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			CreateResponse(w, errors.New("user doesn't exists"), nil, http.StatusUnauthorized)
 			return
 		}
@@ -163,7 +172,6 @@ func (handler *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.Password))
 	if err != nil {
-		log.Println("error")
 		CreateResponse(w, errors.New("password is incorrect"), nil, http.StatusUnauthorized)
 		return
 	}
@@ -189,12 +197,17 @@ func (handler *Handler) RegisterProperty(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var existingProperty Property
-	if err := handler.DB.Where("title=? AND location=?", property.Title, property.Location).First(&existingProperty).Error; err != nil {
-		if err != gorm.ErrRecordNotFound {
+	filter := bson.M{"$and": []bson.M{
+		{"title": property.Title},
+		{"location": property.Location},
+	}}
+	if err := handler.PropertyCollection.FindOne(context.Background(), filter).Decode(&existingProperty); err != nil {
+		if err != mongo.ErrNoDocuments {
 			CreateResponse(w, err, nil, http.StatusBadRequest)
 			return
 		}
 	}
+	fmt.Println("property", existingProperty)
 	if existingProperty.Id != "" {
 		CreateResponse(w, errors.New("combination of  title and location should be unique"), nil, http.StatusBadRequest)
 		return
@@ -210,7 +223,8 @@ func (handler *Handler) RegisterProperty(w http.ResponseWriter, r *http.Request)
 	savedProperty := ConvertToDto(property, Property{})
 	savedProperty.Id = propertyId
 	savedProperty.OwnerEmail = ownerEmail
-	if err := handler.DB.Save(&savedProperty).Error; err != nil {
+	_, err = handler.PropertyCollection.InsertOne(context.Background(), savedProperty)
+	if err != nil {
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
 	}
@@ -242,23 +256,25 @@ func (handler *Handler) BuyProperty(w http.ResponseWriter, r *http.Request) {
 	propertyId := r.URL.Query().Get("propertyId")
 	buyerEmail := r.URL.Query().Get("buyerEmail")
 	var property Property
-	if err := handler.DB.Where("id=?", propertyId).First(&property).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	filter := bson.M{"_id": propertyId}
+	if err := handler.PropertyCollection.FindOne(context.Background(), filter).Decode(&property); err != nil {
+		if err == mongo.ErrNoDocuments {
 			CreateResponse(w, errors.New("property not found"), nil, http.StatusNotFound)
 			return
 		}
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
 	}
-	if err := handler.DB.Where("email=?", buyerEmail).First(&User{}).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	filter = bson.M{"email": buyerEmail}
+	if err := handler.UserCollection.FindOne(context.Background(), filter).Err(); err != nil {
+		if err == mongo.ErrNoDocuments {
 			CreateResponse(w, errors.New("buyer not registred"), nil, http.StatusNotFound)
 			return
 		}
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
 	}
-	if !property.IsListed{
+	if !property.IsListed {
 		CreateResponse(w, errors.New("property is not listed for sale"), nil, http.StatusBadRequest)
 		return
 	}
@@ -278,7 +294,10 @@ func (handler *Handler) BuyProperty(w http.ResponseWriter, r *http.Request) {
 	}
 	property.OwnerEmail = buyerEmail
 	property.IsListed = false
-	if err := handler.DB.Save(&property).Error; err != nil {
+	filter = bson.M{"_id": propertyId}
+	update := bson.M{"$set": bson.M{"owner_email": buyerEmail, "is_listed": false}}
+	_, err = handler.PropertyCollection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
 	}
@@ -289,7 +308,7 @@ func (handler *Handler) BuyProperty(w http.ResponseWriter, r *http.Request) {
 
 func (handler *Handler) GetAllTransaction(w http.ResponseWriter, r *http.Request) {
 	transactionId := r.URL.Query().Get("transactionId")
-	data, err := handler.Contract.EvaluateTransaction("GetAllTransaction",transactionId)
+	data, err := handler.Contract.EvaluateTransaction("GetAllTransaction", transactionId)
 	if err != nil {
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
@@ -312,8 +331,9 @@ func (handler *Handler) UpdateFlag(w http.ResponseWriter, r *http.Request) {
 	claims := r.Context().Value("claims").(*Claims)
 	propertyId := r.URL.Query().Get("propertyId")
 	var property Property
-	if err := handler.DB.Where("id=?", propertyId).First(&property).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	filter := bson.M{"_id": propertyId}
+	if err := handler.PropertyCollection.FindOne(context.Background(), filter).Decode(&property); err != nil {
+		if err == mongo.ErrNoDocuments {
 			CreateResponse(w, errors.New("property not found"), nil, http.StatusNotFound)
 			return
 		}
@@ -321,7 +341,7 @@ func (handler *Handler) UpdateFlag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if property.IsListed{
+	if property.IsListed {
 		CreateResponse(w, errors.New("property already listed for sale"), nil, http.StatusBadRequest)
 		return
 	}
@@ -337,11 +357,13 @@ func (handler *Handler) UpdateFlag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	property.IsListed = true
-	if err := handler.DB.Save(&property).Error; err != nil {
+	update := bson.M{"$set": bson.M{"is_listed": property.IsListed}}
+	//	opts := options.Update().SetUpsert(true)
+	_, err = handler.PropertyCollection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
 		CreateResponse(w, err, nil, http.StatusBadRequest)
 		return
 	}
 	CreateResponse(w, err, "Property Updated", http.StatusOK)
 
 }
-
